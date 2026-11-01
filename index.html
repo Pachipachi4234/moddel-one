@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>プロ配信用 ボイスチェンジャー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a; /* slate-900 */
+            color: #f8fafc; /* slate-50 */
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6; 
+            border-radius: 4px;
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #10b981; /* emerald-500 */
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155; /* slate-700 */
+            border-radius: 2px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.3); /* blue border */
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        #visualizer {
+            width: 100%;
+            height: 200px;
+            border-radius: 0.5rem;
+            background: #000;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 md:p-8">
+
+    <!-- Header & Disclaimer -->
+    <header class="mb-8">
+        <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-green-400 mb-2">
+            プロ配信用 ボイスチェンジャー
+        </h1>
+        <div class="glass-panel p-4 rounded-lg border-l-4 border-l-yellow-500 text-sm text-gray-300">
+            <strong class="text-yellow-400">※注意事項：</strong> ブラウザ単体での動作のため、AI(RVC等)による完全な声質クローンではなく、ピッチシフトとEQ調整による擬似的な声質変換となります。
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Left Panel: Controls -->
+        <div class="glass-panel rounded-xl p-6 lg:col-span-1 flex flex-col gap-6">
+            
+            <!-- Mic Control -->
+            <div>
+                <h2 class="text-xl font-semibold mb-4 text-blue-400 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    入力ソース
+                </h2>
+                <button id="btn-toggle-mic" class="w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 transition font-bold text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]">
+                    マイクをオンにする
+                </button>
+                <p id="mic-status" class="text-xs text-center mt-2 text-gray-400">マイクは未接続です。</p>
+            </div>
+
+            <hr class="border-slate-700">
+
+            <!-- Target Audio Analysis -->
+            <div>
+                <h2 class="text-xl font-semibold mb-2 text-green-400">ターゲット音声解析</h2>
+                <p class="text-xs text-gray-400 mb-4">サンプル(mp3/wav)をアップロードして、EQ設定を自動的に近似させます。</p>
+                <label class="block w-full border-2 border-dashed border-slate-600 hover:border-green-400 transition rounded-lg p-4 text-center cursor-pointer">
+                    <span id="file-label" class="text-sm font-medium">クリックして音声ファイルを選択</span>
+                    <input type="file" id="target-audio-upload" accept="audio/mp3, audio/wav, audio/mpeg" class="hidden">
+                </label>
+                <div id="analysis-status" class="text-xs text-green-300 mt-2 hidden">解析中...</div>
+            </div>
+
+            <hr class="border-slate-700">
+
+            <!-- Voice Shaping Controls -->
+            <div class="flex-1 flex flex-col gap-4">
+                <h2 class="text-xl font-semibold text-blue-400">ボイスシェイピング</h2>
+                
+                <!-- Pitch -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm font-medium">ピッチシフト</label>
+                        <span id="val-pitch" class="text-sm text-green-400">0 st</span>
+                    </div>
+                    <input type="range" id="slider-pitch" min="-12" max="12" step="0.1" value="0">
+                </div>
+
+                <!-- Low EQ -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm font-medium">低音 EQ (150 Hz)</label>
+                        <span id="val-low" class="text-sm text-blue-300">0 dB</span>
+                    </div>
+                    <input type="range" id="slider-low" min="-24" max="24" step="0.5" value="0">
+                </div>
+
+                <!-- Mid EQ -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm font-medium">中音 EQ (1000 Hz)</label>
+                        <span id="val-mid" class="text-sm text-blue-300">0 dB</span>
+                    </div>
+                    <input type="range" id="slider-mid" min="-24" max="24" step="0.5" value="0">
+                </div>
+
+                <!-- High EQ -->
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm font-medium">高音 EQ (4000 Hz)</label>
+                        <span id="val-high" class="text-sm text-blue-300">0 dB</span>
+                    </div>
+                    <input type="range" id="slider-high" min="-24" max="24" step="0.5" value="0">
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Visualizer & Output -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            <div class="glass-panel rounded-xl p-6 flex-1 flex flex-col">
+                <h2 class="text-2xl font-bold mb-4 text-white flex items-center gap-2">
+                    <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
+                    出力モニター
+                </h2>
+                
+                <div class="flex-1 w-full bg-black rounded-lg border border-slate-700 relative overflow-hidden flex items-center justify-center min-h-[300px]">
+                    <canvas id="visualizer"></canvas>
+                </div>
+                
+                <div class="mt-4 flex gap-4 items-center">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="check-monitor" class="w-5 h-5 accent-blue-500" checked>
+                        <span class="text-sm font-medium text-gray-300">出力を聞く (モニター)</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /**
+         * Pitch Shifter AudioWorkletProcessor Code (Inline)
+         * Uses a dual-delay line crossfading approach to shift pitch in the time domain.
+         */
+        const pitchShifterWorkletCode = `
+        class PitchShifterProcessor extends AudioWorkletProcessor {
+            constructor() {
+                super();
+                // Delay line setup
+                this.bufferSize = 4096; // Must be power of 2 for masking, or handled manually
+                this.delayBuffer = new Float32Array(this.bufferSize);
+                this.writePointer = 0;
+                
+                // Pitch shifting parameters
+                this.pitchRatio = 1.0; 
+                this.windowSize = 2048; 
+                this.fadeSize = 512;
+                
+                // Read pointers
+                this.readPointer1 = 0;
+                this.readPointer2 = this.windowSize / 2;
+            }
+
+            static get parameterDescriptors() {
+                return [{
+                    name: 'pitchRatio',
+                    defaultValue: 1.0,
+                    minValue: 0.5,
+                    maxValue: 2.0
+                }];
+            }
+
+            process(inputs, outputs, parameters) {
+                const input = inputs[0];
+                const output = outputs[0];
+                
+                if (!input || !input[0] || !output || !output[0]) return true;
+
+                const inputChannel = input[0];
+                const outputChannel = output[0];
+                
+                const pitchRatio = parameters.pitchRatio.length > 1 ? parameters.pitchRatio[0] : parameters.pitchRatio[0];
+                const phaseIncrement = pitchRatio;
+
+                for (let i = 0; i < inputChannel.length; i++) {
+                    // Write to delay buffer
+                    this.delayBuffer[this.writePointer] = inputChannel[i];
+                    
+                    // Crossfade logic for read pointers
+                    // Calculate distance from write pointer
+                    let delay1 = this.writePointer - Math.floor(this.readPointer1);
+                    if (delay1 < 0) delay1 += this.bufferSize;
+                    let delay2 = this.writePointer - Math.floor(this.readPointer2);
+                    if (delay2 < 0) delay2 += this.bufferSize;
+
+                    // Read samples
+                    const sample1 = this.delayBuffer[(Math.floor(this.readPointer1)) % this.bufferSize];
+                    const sample2 = this.delayBuffer[(Math.floor(this.readPointer2)) % this.bufferSize];
+
+                    // Simple triangular envelope for crossfading
+                    let env1 = 1.0 - Math.abs(delay1 - this.windowSize / 2) / (this.windowSize / 2);
+                    let env2 = 1.0 - Math.abs(delay2 - this.windowSize / 2) / (this.windowSize / 2);
+                    
+                    env1 = Math.max(0, env1);
+                    env2 = Math.max(0, env2);
+                    
+                    // Normalize envelopes
+                    const envSum = env1 + env2 + 0.001;
+                    
+                    outputChannel[i] = (sample1 * env1 + sample2 * env2) / envSum;
+
+                    // Advance pointers
+                    this.writePointer = (this.writePointer + 1) % this.bufferSize;
+                    this.readPointer1 = (this.readPointer1 + phaseIncrement) % this.bufferSize;
+                    this.readPointer2 = (this.readPointer2 + phaseIncrement) % this.bufferSize;
+                }
+
+                // Copy to other channels if stereo
+                for (let channel = 1; channel < output.length; channel++) {
+                    output[channel].set(outputChannel);
+                }
+
+                return true;
+            }
+        }
+        registerProcessor('pitch-shifter', PitchShifterProcessor);
+        `;
+
+        // --- Application State & Web Audio Nodes ---
+        let audioCtx;
+        let micStream;
+        let sourceNode;
+        let pitchShifterNode;
+        let lowEq, midEq, highEq;
+        let analyserNode;
+        let outputGainNode; // To control monitoring
+        
+        let isMicActive = false;
+        let animationId;
+
+        // UI Elements
+        const btnToggleMic = document.getElementById('btn-toggle-mic');
+        const micStatus = document.getElementById('mic-status');
+        const fileUpload = document.getElementById('target-audio-upload');
+        const fileLabel = document.getElementById('file-label');
+        const analysisStatus = document.getElementById('analysis-status');
+        const canvas = document.getElementById('visualizer');
+        const canvasCtx = canvas.getContext('2d');
+        const checkMonitor = document.getElementById('check-monitor');
+
+        // Sliders
+        const sliderPitch = document.getElementById('slider-pitch');
+        const sliderLow = document.getElementById('slider-low');
+        const sliderMid = document.getElementById('slider-mid');
+        const sliderHigh = document.getElementById('slider-high');
+
+        const valPitch = document.getElementById('val-pitch');
+        const valLow = document.getElementById('val-low');
+        const valMid = document.getElementById('val-mid');
+        const valHigh = document.getElementById('val-high');
+
+        // --- Initialization ---
+        async function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Load AudioWorklet from Blob
+            const blob = new Blob([pitchShifterWorkletCode], { type: 'application/javascript' });
+            const blobUrl = URL.createObjectURL(blob);
+            await audioCtx.audioWorklet.addModule(blobUrl);
+
+            // Create Nodes
+            pitchShifterNode = new AudioWorkletNode(audioCtx, 'pitch-shifter');
+            
+            lowEq = audioCtx.createBiquadFilter();
+            lowEq.type = 'lowshelf';
+            lowEq.frequency.value = 150;
+
+            midEq = audioCtx.createBiquadFilter();
+            midEq.type = 'peaking';
+            midEq.frequency.value = 1000;
+            midEq.Q.value = 1.0;
+
+            highEq = audioCtx.createBiquadFilter();
+            highEq.type = 'highshelf';
+            highEq.frequency.value = 4000;
+
+            analyserNode = audioCtx.createAnalyser();
+            analyserNode.fftSize = 2048;
+
+            outputGainNode = audioCtx.createGain();
+            outputGainNode.gain.value = checkMonitor.checked ? 1.0 : 0.0;
+
+            // Connect Graph (Wait for source to connect to pitchShifter)
+            pitchShifterNode.connect(lowEq);
+            lowEq.connect(midEq);
+            midEq.connect(highEq);
+            highEq.connect(analyserNode);
+            analyserNode.connect(outputGainNode);
+            outputGainNode.connect(audioCtx.destination);
+            
+            updateCanvasSize();
+            window.addEventListener('resize', updateCanvasSize);
+        }
+
+        // --- Mic Handling ---
+        btnToggleMic.addEventListener('click', async () => {
+            if (!isMicActive) {
+                try {
+                    await initAudio();
+                    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                    micStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        } 
+                    });
+                    
+                    sourceNode = audioCtx.createMediaStreamSource(micStream);
+                    sourceNode.connect(pitchShifterNode);
+                    
+                    isMicActive = true;
+                    btnToggleMic.textContent = 'マイクをオフにする';
+                    btnToggleMic.className = 'w-full py-3 rounded-lg bg-red-600 hover:bg-red-500 transition font-bold text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]';
+                    micStatus.textContent = 'マイク接続済み・処理中';
+                    micStatus.classList.replace('text-gray-400', 'text-green-400');
+                    
+                    drawVisualizer();
+                } catch (err) {
+                    console.error('Mic error:', err);
+                    alert('マイクにアクセスできませんでした。権限を確認してください。');
+                }
+            } else {
+                if (micStream) {
+                    micStream.getTracks().forEach(track => track.stop());
+                }
+                if (sourceNode) {
+                    sourceNode.disconnect();
+                }
+                isMicActive = false;
+                btnToggleMic.textContent = 'マイクをオンにする';
+                btnToggleMic.className = 'w-full py-3 rounded-lg bg-blue-600 hover:bg-blue-500 transition font-bold text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]';
+                micStatus.textContent = 'マイクは未接続です。';
+                micStatus.classList.replace('text-green-400', 'text-gray-400');
+                cancelAnimationFrame(animationId);
+                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        });
+
+        // --- Monitor Toggle ---
+        checkMonitor.addEventListener('change', (e) => {
+            if (outputGainNode) {
+                outputGainNode.gain.value = e.target.checked ? 1.0 : 0.0;
+            }
+        });
+
+        // --- Slider Handling ---
+        function updateSliders() {
+            if(!pitchShifterNode) return;
+
+            // Semitones to Pitch Ratio: ratio = 2^(semitones/12)
+            const semitones = parseFloat(sliderPitch.value);
+            const ratio = Math.pow(2, semitones / 12);
+            pitchShifterNode.parameters.get('pitchRatio').value = ratio;
+            valPitch.textContent = `${semitones > 0 ? '+' : ''}${semitones} st`;
+
+            lowEq.gain.value = parseFloat(sliderLow.value);
+            valLow.textContent = `${sliderLow.value} dB`;
+
+            midEq.gain.value = parseFloat(sliderMid.value);
+            valMid.textContent = `${sliderMid.value} dB`;
+
+            highEq.gain.value = parseFloat(sliderHigh.value);
+            valHigh.textContent = `${sliderHigh.value} dB`;
+        }
+
+        sliderPitch.addEventListener('input', updateSliders);
+        sliderLow.addEventListener('input', updateSliders);
+        sliderMid.addEventListener('input', updateSliders);
+        sliderHigh.addEventListener('input', updateSliders);
+
+        // --- Target Audio Analysis (OfflineAudioContext) ---
+        fileUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileLabel.textContent = file.name;
+            analysisStatus.classList.remove('hidden');
+            analysisStatus.textContent = '周波数プロファイルを解析中...';
+
+            try {
+                // Ensure audioCtx exists to decode
+                await initAudio(); 
+
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+                // Use OfflineAudioContext for fast analysis
+                const offlineCtx = new OfflineAudioContext(1, audioBuffer.length, audioBuffer.sampleRate);
+                const offlineSource = offlineCtx.createBufferSource();
+                offlineSource.buffer = audioBuffer;
+
+                const analyzer = offlineCtx.createAnalyser();
+                analyzer.fftSize = 2048;
+                offlineSource.connect(analyzer);
+                analyzer.connect(offlineCtx.destination);
+                offlineSource.start();
+
+                await offlineCtx.startRendering();
+
+                // Get average frequency data
+                const freqData = new Float32Array(analyzer.frequencyBinCount);
+                analyzer.getFloatFrequencyData(freqData);
+
+                // Rough estimation of bands to set EQ automatically
+                let lowSum = 0, midSum = 0, highSum = 0;
+                let lowCount = 0, midCount = 0, highCount = 0;
+                
+                const nyquist = audioBuffer.sampleRate / 2;
+                const binSize = nyquist / analyzer.frequencyBinCount;
+
+                for(let i = 0; i < freqData.length; i++) {
+                    let freq = i * binSize;
+                    let val = freqData[i]; // dB value
+                    if (val === -Infinity) continue;
+
+                    if (freq < 300) { lowSum += val; lowCount++; }
+                    else if (freq < 2000) { midSum += val; midCount++; }
+                    else { highSum += val; highCount++; }
+                }
+
+                const avgLow = lowCount ? lowSum / lowCount : -100;
+                const avgMid = midCount ? midSum / midCount : -100;
+                const avgHigh = highCount ? highSum / highCount : -100;
+
+                // Map absolute dB averages to relative EQ slider changes (-24 to +24)
+                // This is a rough heuristic for "matching"
+                const normalize = (val) => Math.max(-24, Math.min(24, (val + 60) / 1.5)); 
+
+                sliderLow.value = normalize(avgLow).toFixed(1);
+                sliderMid.value = normalize(avgMid).toFixed(1);
+                sliderHigh.value = normalize(avgHigh).toFixed(1);
+
+                // Pitch estimation is complex in-browser. We'll leave pitch slider 
+                // to manual control as it dictates gender/character shift heavily.
+                updateSliders();
+                
+                analysisStatus.textContent = '解析完了。EQ設定を更新しました。';
+                setTimeout(() => analysisStatus.classList.add('hidden'), 3000);
+
+            } catch (err) {
+                console.error(err);
+                analysisStatus.textContent = '音声の解析にエラーが発生しました。';
+                analysisStatus.classList.replace('text-green-300', 'text-red-400');
+            }
+        });
+
+        // --- Visualizer ---
+        function updateCanvasSize() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+        }
+
+        function drawVisualizer() {
+            if (!isMicActive || !analyserNode) return;
+            animationId = requestAnimationFrame(drawVisualizer);
+
+            const bufferLength = analyserNode.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyserNode.getByteFrequencyData(dataArray);
+
+            canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const barWidth = (canvas.width / bufferLength) * 2.5;
+            let barHeight;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                barHeight = dataArray[i];
+
+                // Neon Green/Blue Gradient based on height and position
+                const r = 16;
+                const g = barHeight + (25 * (i/bufferLength));
+                const b = 250 - (barHeight / 2);
+
+                canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+                canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+                x += barWidth + 1;
+            }
+        }
+    </script>
+</body>
+</html>
