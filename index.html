@@ -63,10 +63,10 @@
     <!-- Header -->
     <header class="mb-8">
         <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-green-400 mb-2">
-            Moddel-one <span class="text-xs text-purple-300 font-mono border border-purple-500 px-2 py-0.5 rounded">AI Web-ONNX Engine</span>
+            Moddel-one <span class="text-xs text-purple-300 font-mono border border-purple-500 px-2 py-0.5 rounded">AI Web-ONNX Engine v2</span>
         </h1>
         <div class="glass-panel p-4 rounded-lg border-l-4 border-l-purple-500 text-sm text-gray-300">
-            <strong class="text-purple-400">🤖 AI推論対応版：</strong> ONNX Runtime Web により、Applioで出力した `.onnx` モデルのリアルタイム音声変換に対応しました。
+            <strong class="text-purple-400">🤖 AI推論エンジン（エコー防止修正版）：</strong> Applio等の `.onnx` AI声質モデルによるリアルタイム音声変換。
         </div>
     </header>
 
@@ -98,7 +98,7 @@
                     <span id="onnx-file-label" class="text-xs font-medium text-purple-200">.onnx モデルを選択</span>
                     <input type="file" id="onnx-model-upload" accept=".onnx" class="hidden">
                 </label>
-                <div id="onnx-status" class="text-[11px] text-purple-300 mt-2 font-mono">状態: DSP (フォールバック) モード</div>
+                <div id="onnx-status" class="text-[11px] text-purple-300 mt-2 font-mono">状態: DSP モード</div>
             </div>
 
             <hr class="border-slate-700">
@@ -177,7 +177,7 @@
     </main>
 
     <script>
-        // AI推論およびDSPフォールバック用 AudioWorklet モジュール
+        // エコー防止型 AudioWorklet モジュール
         const audioProcessorCode = `
         class VoiceProcessor extends AudioWorkletProcessor {
             constructor() {
@@ -191,19 +191,23 @@
                 this.readPointer2 = this.windowSize / 2;
                 
                 this.isAiActive = false;
-                this.aiBuffer = new Float32Array(1024);
-                this.aiBufferIndex = 0;
+                // FIFOリングバッファ構造でエコー・重複再生を遮断
+                this.outQueue = new Float32Array(8192);
+                this.readIdx = 0;
+                this.writeIdx = 0;
 
                 this.port.onmessage = (e) => {
                     if (e.data.type === 'SET_AI_MODE') {
                         this.isAiActive = e.data.enabled;
+                        this.readIdx = 0;
+                        this.writeIdx = 0;
                     } else if (e.data.type === 'SET_PITCH') {
                         this.pitchRatio = e.data.ratio;
                     } else if (e.data.type === 'RECEIVE_AI_AUDIO') {
-                        // 推論結果を受け取る処理
-                        const outputData = e.data.audio;
-                        for (let i = 0; i < outputData.length && i < this.aiBuffer.length; i++) {
-                            this.aiBuffer[i] = outputData[i];
+                        const newSamples = e.data.audio;
+                        for (let i = 0; i < newSamples.length; i++) {
+                            this.outQueue[this.writeIdx] = newSamples[i];
+                            this.writeIdx = (this.writeIdx + 1) % this.outQueue.length;
                         }
                     }
                 };
@@ -218,13 +222,19 @@
                 const outputChannel = output[0];
 
                 if (this.isAiActive) {
-                    // AI変換モード: フレームをメインスレッドに送信してONNX推論
-                    this.port.postMessage({ type: 'PROCESS_AI_FRAME', frame: inputChannel });
+                    // 入力フレームを1回だけ推論処理へ送信
+                    this.port.postMessage({ type: 'PROCESS_AI_FRAME', frame: new Float32Array(inputChannel) });
+                    
                     for (let i = 0; i < outputChannel.length; i++) {
-                        outputChannel[i] = this.aiBuffer[i % this.aiBuffer.length] || inputChannel[i];
+                        if (this.readIdx !== this.writeIdx) {
+                            outputChannel[i] = this.outQueue[this.readIdx];
+                            this.readIdx = (this.readIdx + 1) % this.outQueue.length;
+                        } else {
+                            outputChannel[i] = 0; // 無音（キューが空の場合）
+                        }
                     }
                 } else {
-                    // DSPピッチシフト（フォールバック）
+                    // DSP ピッチシフト (フォールバック)
                     for (let i = 0; i < inputChannel.length; i++) {
                         this.delayBuffer[this.writePointer] = inputChannel[i];
                         
@@ -260,7 +270,7 @@
 
         let audioCtx, micStream, sourceNode, inputGainNode, voiceNode, lowEq, midEq, highEq, analyserNode, outputGainNode;
         let isMicActive = false, animationId;
-        let onnxSession = null, isAiMode = false;
+        let onnxSession = null, isAiMode = false, isInferring = false;
 
         const btnToggleMic = document.getElementById('btn-toggle-mic');
         const micStatus = document.getElementById('mic-status');
@@ -283,7 +293,7 @@
         const valMid = document.getElementById('val-mid');
         const valHigh = document.getElementById('val-high');
 
-        // --- ONNX モデルのロード処理 ---
+        // ONNX Model Load
         onnxModelUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -293,7 +303,6 @@
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                // WebGL / WASM プロバイダでセッション作成
                 onnxSession = await ort.InferenceSession.create(arrayBuffer, {
                     executionProviders: ['webgl', 'wasm']
                 });
@@ -302,7 +311,7 @@
                 if (voiceNode) {
                     voiceNode.port.postMessage({ type: 'SET_AI_MODE', enabled: true });
                 }
-                onnxStatus.textContent = "状態: 🎉 AI ONNXモデルロード完了 (AIリアルタイム変換中)";
+                onnxStatus.textContent = "状態: 🎉 AI ONNXモデルロード完了 (エコー完全カット・AIリアルタイム変換中)";
                 onnxStatus.className = "text-[11px] text-green-400 font-mono font-bold mt-2";
             } catch (err) {
                 console.error("ONNX Load Error:", err);
@@ -324,14 +333,14 @@
 
             voiceNode = new AudioWorkletNode(audioCtx, 'voice-processor');
             
-            // AudioWorkletからの推論リクエストを処理
+            // 重複推論を防ぐロック機構付きメッセージ受信
             voiceNode.port.onmessage = async (e) => {
-                if (e.data.type === 'PROCESS_AI_FRAME' && onnxSession && isAiMode) {
+                if (e.data.type === 'PROCESS_AI_FRAME' && onnxSession && isAiMode && !isInferring) {
+                    isInferring = true;
                     try {
                         const inputFrame = e.data.frame;
                         const tensorInput = new ort.Tensor('float32', inputFrame, [1, 1, inputFrame.length]);
                         
-                        // ONNX 推論の実行
                         const feeds = {};
                         feeds[onnxSession.inputNames[0]] = tensorInput;
                         const results = await onnxSession.run(feeds);
@@ -342,7 +351,8 @@
                             audio: outputTensor.data
                         });
                     } catch (err) {
-                        // 推論エラー時は非同期スキップ
+                    } finally {
+                        isInferring = false;
                     }
                 }
             };
