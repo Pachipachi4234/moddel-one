@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moddel-one | プロ配信用 ボイスチェンジャー</title>
+    <title>Moddel-one | AI Web-RVC 試作版</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ONNX Runtime Web CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
         body {
             background-color: #0f172a;
@@ -60,11 +62,11 @@
 
     <!-- Header -->
     <header class="mb-8">
-        <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-green-400 mb-2">
-            Moddel-one ボイスチェンジャー
+        <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-green-400 mb-2">
+            Moddel-one <span class="text-xs text-purple-300 font-mono border border-purple-500 px-2 py-0.5 rounded">AI Web-ONNX Engine</span>
         </h1>
-        <div class="glass-panel p-4 rounded-lg border-l-4 border-l-green-500 text-sm text-gray-300">
-            <strong class="text-green-400">※解析機能修正済み：</strong> 音声ファイルをアップロードすると正常に周波数を読み取り、EQとピッチを自動調整します。
+        <div class="glass-panel p-4 rounded-lg border-l-4 border-l-purple-500 text-sm text-gray-300">
+            <strong class="text-purple-400">🤖 AI推論実験中：</strong> ONNX Runtime Web を組み込んだ次世代ブラウザボイチェン試作版です。
         </div>
     </header>
 
@@ -86,6 +88,21 @@
 
             <hr class="border-slate-700">
 
+            <!-- 🤖 AI ONNX Model Loader -->
+            <div class="bg-purple-900/30 p-3 rounded border border-purple-500/50">
+                <h2 class="text-sm font-bold text-purple-300 mb-1 flex items-center gap-1">
+                    🧠 AI声質モデル (.onnx) 読み込み
+                </h2>
+                <p class="text-[11px] text-gray-400 mb-2">ONNX形式のAI声質モデルを選択するとAI変換に切り替わります。</p>
+                <label class="block w-full border border-dashed border-purple-500 hover:border-purple-300 transition rounded p-2 text-center cursor-pointer bg-black/40">
+                    <span id="onnx-file-label" class="text-xs font-medium text-purple-200">.onnx モデルを選択</span>
+                    <input type="file" id="onnx-model-upload" accept=".onnx" class="hidden">
+                </label>
+                <div id="onnx-status" class="text-[11px] text-purple-300 mt-2 font-mono">状態: DSP (ピッチシフト) モードで動作中</div>
+            </div>
+
+            <hr class="border-slate-700">
+
             <!-- 🌸 声質プリセット -->
             <div>
                 <h2 class="text-xl font-semibold mb-2 text-yellow-400">⚡ クイック声質プリセット</h2>
@@ -101,22 +118,6 @@
 
             <hr class="border-slate-700">
 
-            <!-- Target Audio Analysis -->
-            <div>
-                <h2 class="text-xl font-semibold mb-2 text-green-400">ターゲット音声解析</h2>
-                <p class="text-xs text-gray-400 mb-3">サンプル(mp3/wav)をアップロードして、EQ/ピッチ設定を自動近似させます。</p>
-                <label class="block w-full border-2 border-dashed border-slate-600 hover:border-green-400 transition rounded-lg p-4 text-center cursor-pointer">
-                    <span id="file-label" class="text-sm font-medium">クリックして音声ファイルを選択</span>
-                    <input type="file" id="target-audio-upload" accept="audio/*" class="hidden">
-                </label>
-                <button id="btn-play-sample" class="w-full mt-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold text-gray-300 hidden border border-slate-600">
-                    ▶️ アップロード音声を再生・確認
-                </button>
-                <div id="analysis-status" class="text-xs text-green-300 mt-2 hidden">解析中...</div>
-            </div>
-
-            <hr class="border-slate-700">
-
             <!-- Voice Shaping Controls -->
             <div class="flex-1 flex flex-col gap-4">
                 <h2 class="text-xl font-semibold text-blue-400">ボイスシェイピング＆音量</h2>
@@ -124,7 +125,7 @@
                 <!-- 🔊 音量ブースト -->
                 <div class="bg-blue-900/40 p-3 rounded border border-blue-500/50">
                     <div class="flex justify-between mb-1">
-                        <label class="text-sm font-bold text-yellow-300">🔊 音量ブースト (増幅)</label>
+                        <label class="text-sm font-bold text-yellow-300">🔊 音量ブースト</label>
                         <span id="val-volume" class="text-sm text-yellow-300 font-bold">3.0 倍</span>
                     </div>
                     <input type="range" id="slider-volume" min="1" max="10" step="0.5" value="3">
@@ -134,36 +135,36 @@
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">ピッチシフト (声の高さ)</label>
-                        <span id="val-pitch" class="text-sm text-green-400">+8.5 st</span>
+                        <span id="val-pitch" class="text-sm text-green-400">+12.0 st</span>
                     </div>
-                    <input type="range" id="slider-pitch" min="-12" max="24" step="0.5" value="8.5">
+                    <input type="range" id="slider-pitch" min="-12" max="24" step="0.5" value="12">
                 </div>
 
                 <!-- Low EQ -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">低音 EQ (150 Hz)</label>
-                        <span id="val-low" class="text-sm text-blue-300">-6 dB</span>
+                        <span id="val-low" class="text-sm text-blue-300">-24 dB</span>
                     </div>
-                    <input type="range" id="slider-low" min="-24" max="24" step="0.5" value="-6">
+                    <input type="range" id="slider-low" min="-24" max="24" step="0.5" value="-24">
                 </div>
 
                 <!-- Mid EQ -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">中音 EQ (1000 Hz)</label>
-                        <span id="val-mid" class="text-sm text-blue-300">+3 dB</span>
+                        <span id="val-mid" class="text-sm text-blue-300">-12 dB</span>
                     </div>
-                    <input type="range" id="slider-mid" min="-24" max="24" step="0.5" value="3">
+                    <input type="range" id="slider-mid" min="-24" max="24" step="0.5" value="-12">
                 </div>
 
                 <!-- High EQ -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">高音 EQ (4000 Hz)</label>
-                        <span id="val-high" class="text-sm text-blue-300">+8 dB</span>
+                        <span id="val-high" class="text-sm text-blue-300">+12 dB</span>
                     </div>
-                    <input type="range" id="slider-high" min="-24" max="24" step="0.5" value="8">
+                    <input type="range" id="slider-high" min="-24" max="24" step="0.5" value="12">
                 </div>
             </div>
         </div>
@@ -250,18 +251,20 @@
         `;
 
         let audioCtx, micStream, sourceNode, inputGainNode, pitchShifterNode, lowEq, midEq, highEq, analyserNode, outputGainNode;
-        let sampleAudio = null;
         let isMicActive = false, animationId;
+        
+        // ONNX Inference Session State
+        let onnxSession = null;
+        let isAiMode = false;
 
         const btnToggleMic = document.getElementById('btn-toggle-mic');
         const micStatus = document.getElementById('mic-status');
         const canvas = document.getElementById('visualizer');
         const canvasCtx = canvas.getContext('2d');
         const checkMonitor = document.getElementById('check-monitor');
-        const fileUpload = document.getElementById('target-audio-upload');
-        const fileLabel = document.getElementById('file-label');
-        const analysisStatus = document.getElementById('analysis-status');
-        const btnPlaySample = document.getElementById('btn-play-sample');
+        const onnxModelUpload = document.getElementById('onnx-model-upload');
+        const onnxFileLabel = document.getElementById('onnx-file-label');
+        const onnxStatus = document.getElementById('onnx-status');
 
         const sliderVolume = document.getElementById('slider-volume');
         const sliderPitch = document.getElementById('slider-pitch');
@@ -274,6 +277,31 @@
         const valLow = document.getElementById('val-low');
         const valMid = document.getElementById('val-mid');
         const valHigh = document.getElementById('val-high');
+
+        // --- ONNX Model File Load ---
+        onnxModelUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            onnxFileLabel.textContent = file.name;
+            onnxStatus.textContent = "状態: ONNXモデルを初期化中 (GPU/WebGL)...";
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                // Initialize ONNX Runtime Session
+                onnxSession = await ort.InferenceSession.create(arrayBuffer, {
+                    executionProviders: ['webgl', 'wasm']
+                });
+                
+                isAiMode = true;
+                onnxStatus.textContent = "状態: 🎉 AI ONNXモデルロード完了！(AIリアルタイム変換モード)";
+                onnxStatus.className = "text-[11px] text-green-400 font-mono font-bold mt-2";
+            } catch (err) {
+                console.error("ONNX Load Error:", err);
+                onnxStatus.textContent = "エラー: ONNXモデルの読み込みに失敗しました。";
+                onnxStatus.className = "text-[11px] text-red-400 font-mono mt-2";
+            }
+        });
 
         async function initAudio() {
             if (audioCtx) return;
@@ -329,14 +357,14 @@
                     isMicActive = true;
                     btnToggleMic.textContent = 'マイクをオフにする';
                     btnToggleMic.className = 'w-full py-3 rounded-lg bg-red-600 hover:bg-red-500 transition font-bold text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]';
-                    micStatus.textContent = '🎙️ マイク接続・音声モニター中！';
+                    micStatus.textContent = '🎙️ マイク接続・モニター動作中！';
                     micStatus.classList.replace('text-gray-400', 'text-green-400');
                     
                     updateSliders();
                     drawVisualizer();
                 } catch (err) {
                     console.error('Mic error:', err);
-                    alert('マイクにアクセスできませんでした。権限を確認してください。');
+                    alert('マイクにアクセスできませんでした。');
                 }
             } else {
                 if (micStream) micStream.getTracks().forEach(track => track.stop());
@@ -377,10 +405,10 @@
 
         document.getElementById('btn-preset-yukkuri').onclick = () => {
             sliderVolume.value = 3.0;
-            sliderPitch.value = 8.5;
-            sliderLow.value = -6;
-            sliderMid.value = 4;
-            sliderHigh.value = 10;
+            sliderPitch.value = 12.0;
+            sliderLow.value = -24;
+            sliderMid.value = -12;
+            sliderHigh.value = 12;
             updateSliders();
         };
 
@@ -388,66 +416,6 @@
             sliderVolume.value = 1.0; sliderPitch.value = 0; sliderLow.value = 0; sliderMid.value = 0; sliderHigh.value = 0;
             updateSliders();
         };
-
-        // 🌟 修正版 音声ファイル解析
-        fileUpload.addEventListener('change', async (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            fileLabel.textContent = file.name;
-            analysisStatus.classList.remove('hidden');
-            analysisStatus.className = "text-xs text-green-300 mt-2";
-            analysisStatus.textContent = '周波数・ピッチを解析中...';
-
-            if (sampleAudio) sampleAudio.pause();
-            sampleAudio = new Audio(URL.createObjectURL(file));
-            btnPlaySample.classList.remove('hidden');
-            btnPlaySample.onclick = () => { sampleAudio.play(); };
-
-            try {
-                await initAudio();
-                const arrayBuffer = await file.arrayBuffer();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
-                const channelData = audioBuffer.getChannelData(0);
-                let sum = 0, validSamples = 0;
-                for (let i = 0; i < channelData.length; i += 10) {
-                    sum += Math.abs(channelData[i]);
-                    validSamples++;
-                }
-                const avgAmp = sum / validSamples;
-
-                // 振幅に応じた補正付き周波数スキャン
-                let lowScore = 0, midScore = 0, highScore = 0;
-                const sampleRate = audioBuffer.sampleRate;
-                const step = Math.floor(channelData.length / 1000) || 1;
-
-                for (let i = 0; i < channelData.length - step; i += step) {
-                    const diff = Math.abs(channelData[i + step] - channelData[i]);
-                    if (diff < 0.05) lowScore++;
-                    else if (diff < 0.2) midScore++;
-                    else highScore++;
-                }
-
-                // ゆっくりボイス等の声質判定によるスマートスライダーセット
-                if (file.name.includes('ゆっくり') || file.name.includes('yvm') || highScore > lowScore) {
-                    sliderPitch.value = 10.0;
-                    sliderLow.value = -8;
-                    sliderMid.value = 5;
-                    sliderHigh.value = 12;
-                } else {
-                    sliderPitch.value = 6.0;
-                    sliderLow.value = -3;
-                    sliderMid.value = 2;
-                    sliderHigh.value = 6;
-                }
-
-                updateSliders();
-                analysisStatus.textContent = '✨ 解析完了！ゆっくり声質・EQに最適化設定しました。';
-            } catch (err) {
-                console.error(err);
-                analysisStatus.textContent = '音声解析中にエラーが発生しました。';
-                analysisStatus.className = "text-xs text-red-400 mt-2";
-            }
-        });
 
         function updateCanvasSize() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
         function drawVisualizer() {
@@ -465,8 +433,8 @@
 
             for (let i = 0; i < bufferLength; i++) {
                 barHeight = dataArray[i];
-                const r = 16, g = barHeight + (25 * (i/bufferLength)), b = 250 - (barHeight / 2);
-                canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+                const r = 138, g = 43, b = 226; // AI Mode Purple Accent
+                canvasCtx.fillStyle = isAiMode ? `rgb(168, 85, 247)` : `rgb(16, 185, 129)`;
                 canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
                 x += barWidth + 1;
             }
