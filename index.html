@@ -64,7 +64,7 @@
             Moddel-one ボイスチェンジャー
         </h1>
         <div class="glass-panel p-4 rounded-lg border-l-4 border-l-yellow-500 text-sm text-gray-300">
-            <strong class="text-yellow-400">※修正完了：</strong> 音声モニター（リアルタイム返信）を修復しました。「マイクをオン」にして喋ると変更された声が返ってきます。
+            <strong class="text-yellow-400">※音量強化版：</strong> 音量が小さい問題に対処するため「音量ブースト」スライダーを追加しました。
         </div>
     </header>
 
@@ -86,7 +86,7 @@
 
             <hr class="border-slate-700">
 
-            <!-- 🌸 声質プリセット（ゆっくり対応） -->
+            <!-- 🌸 声質プリセット -->
             <div>
                 <h2 class="text-xl font-semibold mb-2 text-yellow-400">⚡ クイック声質プリセット</h2>
                 <div class="grid grid-cols-2 gap-2 mt-3">
@@ -101,30 +101,26 @@
 
             <hr class="border-slate-700">
 
-            <!-- Target Audio Analysis -->
-            <div>
-                <h2 class="text-xl font-semibold mb-2 text-green-400">ターゲット音声解析</h2>
-                <p class="text-xs text-gray-400 mb-4">サンプル(mp3/wav)をアップロードして、EQ設定を自動近似させます。</p>
-                <label class="block w-full border-2 border-dashed border-slate-600 hover:border-green-400 transition rounded-lg p-4 text-center cursor-pointer">
-                    <span id="file-label" class="text-sm font-medium">クリックして音声ファイルを選択</span>
-                    <input type="file" id="target-audio-upload" accept="audio/mp3, audio/wav, audio/mpeg" class="hidden">
-                </label>
-                <div id="analysis-status" class="text-xs text-green-300 mt-2 hidden">解析中...</div>
-            </div>
-
-            <hr class="border-slate-700">
-
             <!-- Voice Shaping Controls -->
             <div class="flex-1 flex flex-col gap-4">
-                <h2 class="text-xl font-semibold text-blue-400">ボイスシェイピング</h2>
+                <h2 class="text-xl font-semibold text-blue-400">ボイスシェイピング＆音量</h2>
                 
-                <!-- Pitch (拡大: -12 ~ +24) -->
+                <!-- 🔊 音量ブースト (追加) -->
+                <div class="bg-blue-900/40 p-3 rounded border border-blue-500/50">
+                    <div class="flex justify-between mb-1">
+                        <label class="text-sm font-bold text-yellow-300">🔊 音量ブースト (増幅)</label>
+                        <span id="val-volume" class="text-sm text-yellow-300 font-bold">3.0 倍</span>
+                    </div>
+                    <input type="range" id="slider-volume" min="1" max="10" step="0.5" value="3">
+                </div>
+
+                <!-- Pitch -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">ピッチシフト (声の高さ)</label>
-                        <span id="val-pitch" class="text-sm text-green-400">+8.0 st</span>
+                        <span id="val-pitch" class="text-sm text-green-400">+8.5 st</span>
                     </div>
-                    <input type="range" id="slider-pitch" min="-12" max="24" step="0.5" value="8">
+                    <input type="range" id="slider-pitch" min="-12" max="24" step="0.5" value="8.5">
                 </div>
 
                 <!-- Low EQ -->
@@ -179,7 +175,6 @@
     </main>
 
     <script>
-        // ピッチシフター（デュアルディレイライン処理）
         const pitchShifterWorkletCode = `
         class PitchShifterProcessor extends AudioWorkletProcessor {
             constructor() {
@@ -238,23 +233,22 @@
         registerProcessor('pitch-shifter', PitchShifterProcessor);
         `;
 
-        let audioCtx, micStream, sourceNode, pitchShifterNode, lowEq, midEq, highEq, analyserNode, outputGainNode;
+        let audioCtx, micStream, sourceNode, inputGainNode, pitchShifterNode, lowEq, midEq, highEq, analyserNode, outputGainNode;
         let isMicActive = false, animationId;
 
         const btnToggleMic = document.getElementById('btn-toggle-mic');
         const micStatus = document.getElementById('mic-status');
-        const fileUpload = document.getElementById('target-audio-upload');
-        const fileLabel = document.getElementById('file-label');
-        const analysisStatus = document.getElementById('analysis-status');
         const canvas = document.getElementById('visualizer');
         const canvasCtx = canvas.getContext('2d');
         const checkMonitor = document.getElementById('check-monitor');
 
+        const sliderVolume = document.getElementById('slider-volume');
         const sliderPitch = document.getElementById('slider-pitch');
         const sliderLow = document.getElementById('slider-low');
         const sliderMid = document.getElementById('slider-mid');
         const sliderHigh = document.getElementById('slider-high');
 
+        const valVolume = document.getElementById('val-volume');
         const valPitch = document.getElementById('val-pitch');
         const valLow = document.getElementById('val-low');
         const valMid = document.getElementById('val-mid');
@@ -267,6 +261,9 @@
             const blob = new Blob([pitchShifterWorkletCode], { type: 'application/javascript' });
             const blobUrl = URL.createObjectURL(blob);
             await audioCtx.audioWorklet.addModule(blobUrl);
+
+            inputGainNode = audioCtx.createGain();
+            inputGainNode.gain.value = parseFloat(sliderVolume.value);
 
             pitchShifterNode = new AudioWorkletNode(audioCtx, 'pitch-shifter');
             
@@ -281,9 +278,10 @@
 
             analyserNode = audioCtx.createAnalyser(); analyserNode.fftSize = 2048;
             outputGainNode = audioCtx.createGain();
-            outputGainNode.gain.value = checkMonitor.checked ? 1.0 : 0.0;
+            outputGainNode.gain.value = checkMonitor.checked ? parseFloat(sliderVolume.value) : 0.0;
 
-            // オーディオルーティングの確実な接続
+            // オーディオ接続チェーン
+            inputGainNode.connect(pitchShifterNode);
             pitchShifterNode.connect(lowEq);
             lowEq.connect(midEq);
             midEq.connect(highEq);
@@ -306,12 +304,12 @@
                     });
                     
                     sourceNode = audioCtx.createMediaStreamSource(micStream);
-                    sourceNode.connect(pitchShifterNode);
+                    sourceNode.connect(inputGainNode);
                     
                     isMicActive = true;
                     btnToggleMic.textContent = 'マイクをオフにする';
                     btnToggleMic.className = 'w-full py-3 rounded-lg bg-red-600 hover:bg-red-500 transition font-bold text-white shadow-[0_0_15px_rgba(220,38,38,0.5)]';
-                    micStatus.textContent = '🎙️ マイク接続・音声返信中 (モニターON)';
+                    micStatus.textContent = '🎙️ マイク接続・大音量でモニター中！';
                     micStatus.classList.replace('text-gray-400', 'text-green-400');
                     
                     updateSliders();
@@ -334,15 +332,20 @@
         });
 
         checkMonitor.addEventListener('change', (e) => {
-            if (outputGainNode) outputGainNode.gain.value = e.target.checked ? 1.0 : 0.0;
+            if (outputGainNode) outputGainNode.gain.value = e.target.checked ? parseFloat(sliderVolume.value) : 0.0;
         });
 
         function updateSliders() {
             if (!pitchShifterNode) return;
+
+            const vol = parseFloat(sliderVolume.value);
+            valVolume.textContent = `${vol.toFixed(1)} 倍`;
+            if (inputGainNode) inputGainNode.gain.value = vol;
+            if (outputGainNode && checkMonitor.checked) outputGainNode.gain.value = vol;
+
             const semitones = parseFloat(sliderPitch.value);
             const ratio = Math.pow(2, semitones / 12);
             pitchShifterNode.parameters.get('pitchRatio').setValueAtTime(ratio, audioCtx.currentTime);
-
             valPitch.textContent = `${semitones > 0 ? '+' : ''}${semitones} st`;
 
             lowEq.gain.value = parseFloat(sliderLow.value); valLow.textContent = `${sliderLow.value} dB`;
@@ -350,75 +353,21 @@
             highEq.gain.value = parseFloat(sliderHigh.value); valHigh.textContent = `${sliderHigh.value} dB`;
         }
 
-        [sliderPitch, sliderLow, sliderMid, sliderHigh].forEach(s => s.addEventListener('input', updateSliders));
+        [sliderVolume, sliderPitch, sliderLow, sliderMid, sliderHigh].forEach(s => s.addEventListener('input', updateSliders));
 
-        // 🌸 ゆっくりプリセットボタン
         document.getElementById('btn-preset-yukkuri').onclick = () => {
-            sliderPitch.value = 8.5; // ゆっくり特有の高めピッチ
-            sliderLow.value = -8;   // 低音カットでアニメ声化
-            sliderMid.value = 4;    // 中域を持ち上げてハッキリ
-            sliderHigh.value = 10;  // 高音強調で「ゆっくりしていってね！」風に
+            sliderVolume.value = 4.0; // 音量も大きめにセット
+            sliderPitch.value = 8.5;
+            sliderLow.value = -6;
+            sliderMid.value = 4;
+            sliderHigh.value = 10;
             updateSliders();
         };
 
         document.getElementById('btn-preset-reset').onclick = () => {
-            sliderPitch.value = 0; sliderLow.value = 0; sliderMid.value = 0; sliderHigh.value = 0;
+            sliderVolume.value = 1.0; sliderPitch.value = 0; sliderLow.value = 0; sliderMid.value = 0; sliderHigh.value = 0;
             updateSliders();
         };
-
-        // ターゲット音声解析
-        fileUpload.addEventListener('change', async (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            fileLabel.textContent = file.name;
-            analysisStatus.classList.remove('hidden');
-            analysisStatus.textContent = '周波数プロファイルを解析中...';
-
-            try {
-                await initAudio();
-                const arrayBuffer = await file.arrayBuffer();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
-                const offlineCtx = new OfflineAudioContext(1, audioBuffer.length, audioBuffer.sampleRate);
-                const offlineSource = offlineCtx.createBufferSource();
-                offlineSource.buffer = audioBuffer;
-                const analyzer = offlineCtx.createAnalyser();
-                analyzer.fftSize = 2048;
-                offlineSource.connect(analyzer);
-                analyzer.connect(offlineCtx.destination);
-                offlineSource.start();
-
-                await offlineCtx.startRendering();
-                const freqData = new Float32Array(analyzer.frequencyBinCount);
-                analyzer.getFloatFrequencyData(freqData);
-
-                let lowSum = 0, midSum = 0, highSum = 0, lowCount = 0, midCount = 0, highCount = 0;
-                const nyquist = audioBuffer.sampleRate / 2, binSize = nyquist / analyzer.frequencyBinCount;
-
-                for(let i = 0; i < freqData.length; i++) {
-                    let freq = i * binSize, val = freqData[i];
-                    if (val === -Infinity) continue;
-                    if (freq < 300) { lowSum += val; lowCount++; }
-                    else if (freq < 2000) { midSum += val; midCount++; }
-                    else { highSum += val; highCount++; }
-                }
-
-                const avgLow = lowCount ? lowSum / lowCount : -100;
-                const avgMid = midCount ? midSum / midCount : -100;
-                const avgHigh = highCount ? highSum / highCount : -100;
-
-                const normalize = (val) => Math.max(-24, Math.min(24, (val + 60) / 1.5)); 
-                sliderLow.value = normalize(avgLow).toFixed(1);
-                sliderMid.value = normalize(avgMid).toFixed(1);
-                sliderHigh.value = normalize(avgHigh).toFixed(1);
-
-                updateSliders();
-                analysisStatus.textContent = '解析完了。ゆっくりボイス用にEQを調整しました！';
-                setTimeout(() => analysisStatus.classList.add('hidden'), 3000);
-            } catch (err) {
-                analysisStatus.textContent = '音声解析に失敗しました。';
-                analysisStatus.classList.replace('text-green-300', 'text-red-400');
-            }
-        });
 
         function updateCanvasSize() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
         function drawVisualizer() {
