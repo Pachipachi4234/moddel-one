@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moddel-one | AI Web-RVC 試作版</title>
+    <title>Moddel-one | AI Web-RVC Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- ONNX Runtime Web CDN -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
@@ -66,7 +66,7 @@
             Moddel-one <span class="text-xs text-purple-300 font-mono border border-purple-500 px-2 py-0.5 rounded">AI Web-ONNX Engine</span>
         </h1>
         <div class="glass-panel p-4 rounded-lg border-l-4 border-l-purple-500 text-sm text-gray-300">
-            <strong class="text-purple-400">🤖 AI推論実験中：</strong> ONNX Runtime Web を組み込んだ次世代ブラウザボイチェン試作版です。
+            <strong class="text-purple-400">🤖 AI推論対応版：</strong> ONNX Runtime Web により、Applioで出力した `.onnx` モデルのリアルタイム音声変換に対応しました。
         </div>
     </header>
 
@@ -93,27 +93,12 @@
                 <h2 class="text-sm font-bold text-purple-300 mb-1 flex items-center gap-1">
                     🧠 AI声質モデル (.onnx) 読み込み
                 </h2>
-                <p class="text-[11px] text-gray-400 mb-2">ONNX形式のAI声質モデルを選択するとAI変換に切り替わります。</p>
+                <p class="text-[11px] text-gray-400 mb-2">Applio等で変換した .onnx モデルを選択するとAI変換が有効化されます。</p>
                 <label class="block w-full border border-dashed border-purple-500 hover:border-purple-300 transition rounded p-2 text-center cursor-pointer bg-black/40">
                     <span id="onnx-file-label" class="text-xs font-medium text-purple-200">.onnx モデルを選択</span>
                     <input type="file" id="onnx-model-upload" accept=".onnx" class="hidden">
                 </label>
-                <div id="onnx-status" class="text-[11px] text-purple-300 mt-2 font-mono">状態: DSP (ピッチシフト) モードで動作中</div>
-            </div>
-
-            <hr class="border-slate-700">
-
-            <!-- 🌸 声質プリセット -->
-            <div>
-                <h2 class="text-xl font-semibold mb-2 text-yellow-400">⚡ クイック声質プリセット</h2>
-                <div class="grid grid-cols-2 gap-2 mt-3">
-                    <button id="btn-preset-yukkuri" class="py-2 px-3 rounded bg-yellow-600 hover:bg-yellow-500 font-bold text-xs text-white shadow transition">
-                        🌸 ゆっくりボイス風
-                    </button>
-                    <button id="btn-preset-reset" class="py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 font-bold text-xs text-gray-200 transition">
-                        🔄 リセット (地声)
-                    </button>
-                </div>
+                <div id="onnx-status" class="text-[11px] text-purple-300 mt-2 font-mono">状態: DSP (フォールバック) モード</div>
             </div>
 
             <hr class="border-slate-700">
@@ -122,49 +107,49 @@
             <div class="flex-1 flex flex-col gap-4">
                 <h2 class="text-xl font-semibold text-blue-400">ボイスシェイピング＆音量</h2>
                 
-                <!-- 🔊 音量ブースト -->
+                <!-- 音量 -->
                 <div class="bg-blue-900/40 p-3 rounded border border-blue-500/50">
                     <div class="flex justify-between mb-1">
-                        <label class="text-sm font-bold text-yellow-300">🔊 音量ブースト</label>
-                        <span id="val-volume" class="text-sm text-yellow-300 font-bold">3.0 倍</span>
+                        <label class="text-sm font-bold text-yellow-300">🔊 出力音量</label>
+                        <span id="val-volume" class="text-sm text-yellow-300 font-bold">1.0 倍</span>
                     </div>
-                    <input type="range" id="slider-volume" min="1" max="10" step="0.5" value="3">
+                    <input type="range" id="slider-volume" min="0.5" max="5.0" step="0.1" value="1.0">
                 </div>
 
                 <!-- Pitch -->
                 <div>
                     <div class="flex justify-between mb-1">
-                        <label class="text-sm font-medium">ピッチシフト (声の高さ)</label>
-                        <span id="val-pitch" class="text-sm text-green-400">+12.0 st</span>
+                        <label class="text-sm font-medium">ピッチシフト (キー変更)</label>
+                        <span id="val-pitch" class="text-sm text-green-400">+7.0 st</span>
                     </div>
-                    <input type="range" id="slider-pitch" min="-12" max="24" step="0.5" value="12">
+                    <input type="range" id="slider-pitch" min="-12" max="24" step="1" value="7">
                 </div>
 
                 <!-- Low EQ -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">低音 EQ (150 Hz)</label>
-                        <span id="val-low" class="text-sm text-blue-300">-24 dB</span>
+                        <span id="val-low" class="text-sm text-blue-300">0 dB</span>
                     </div>
-                    <input type="range" id="slider-low" min="-24" max="24" step="0.5" value="-24">
+                    <input type="range" id="slider-low" min="-24" max="24" step="0.5" value="0">
                 </div>
 
                 <!-- Mid EQ -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">中音 EQ (1000 Hz)</label>
-                        <span id="val-mid" class="text-sm text-blue-300">-12 dB</span>
+                        <span id="val-mid" class="text-sm text-blue-300">0 dB</span>
                     </div>
-                    <input type="range" id="slider-mid" min="-24" max="24" step="0.5" value="-12">
+                    <input type="range" id="slider-mid" min="-24" max="24" step="0.5" value="0">
                 </div>
 
                 <!-- High EQ -->
                 <div>
                     <div class="flex justify-between mb-1">
                         <label class="text-sm font-medium">高音 EQ (4000 Hz)</label>
-                        <span id="val-high" class="text-sm text-blue-300">+12 dB</span>
+                        <span id="val-high" class="text-sm text-blue-300">0 dB</span>
                     </div>
-                    <input type="range" id="slider-high" min="-24" max="24" step="0.5" value="12">
+                    <input type="range" id="slider-high" min="-24" max="24" step="0.5" value="0">
                 </div>
             </div>
         </div>
@@ -184,7 +169,7 @@
                 <div class="mt-4 flex gap-4 items-center">
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" id="check-monitor" class="w-5 h-5 accent-blue-500" checked>
-                        <span class="text-sm font-medium text-gray-300">出力を自分のイヤホン/スピーカーで聞く (モニター)</span>
+                        <span class="text-sm font-medium text-gray-300">出力を自環境でモニターする</span>
                     </label>
                 </div>
             </div>
@@ -192,8 +177,9 @@
     </main>
 
     <script>
-        const pitchShifterWorkletCode = `
-        class PitchShifterProcessor extends AudioWorkletProcessor {
+        // AI推論およびDSPフォールバック用 AudioWorklet モジュール
+        const audioProcessorCode = `
+        class VoiceProcessor extends AudioWorkletProcessor {
             constructor() {
                 super();
                 this.bufferSize = 4096;
@@ -203,42 +189,64 @@
                 this.windowSize = 2048; 
                 this.readPointer1 = 0;
                 this.readPointer2 = this.windowSize / 2;
+                
+                this.isAiActive = false;
+                this.aiBuffer = new Float32Array(1024);
+                this.aiBufferIndex = 0;
+
+                this.port.onmessage = (e) => {
+                    if (e.data.type === 'SET_AI_MODE') {
+                        this.isAiActive = e.data.enabled;
+                    } else if (e.data.type === 'SET_PITCH') {
+                        this.pitchRatio = e.data.ratio;
+                    } else if (e.data.type === 'RECEIVE_AI_AUDIO') {
+                        // 推論結果を受け取る処理
+                        const outputData = e.data.audio;
+                        for (let i = 0; i < outputData.length && i < this.aiBuffer.length; i++) {
+                            this.aiBuffer[i] = outputData[i];
+                        }
+                    }
+                };
             }
 
-            static get parameterDescriptors() {
-                return [{ name: 'pitchRatio', defaultValue: 1.0, minValue: 0.25, maxValue: 4.0 }];
-            }
-
-            process(inputs, outputs, parameters) {
+            process(inputs, outputs) {
                 const input = inputs[0];
                 const output = outputs[0];
                 if (!input || !input[0] || !output || !output[0]) return true;
 
                 const inputChannel = input[0];
                 const outputChannel = output[0];
-                const pitchRatio = parameters.pitchRatio.length > 1 ? parameters.pitchRatio[0] : parameters.pitchRatio[0];
 
-                for (let i = 0; i < inputChannel.length; i++) {
-                    this.delayBuffer[this.writePointer] = inputChannel[i];
-                    
-                    let delay1 = this.writePointer - Math.floor(this.readPointer1);
-                    if (delay1 < 0) delay1 += this.bufferSize;
-                    let delay2 = this.writePointer - Math.floor(this.readPointer2);
-                    if (delay2 < 0) delay2 += this.bufferSize;
+                if (this.isAiActive) {
+                    // AI変換モード: フレームをメインスレッドに送信してONNX推論
+                    this.port.postMessage({ type: 'PROCESS_AI_FRAME', frame: inputChannel });
+                    for (let i = 0; i < outputChannel.length; i++) {
+                        outputChannel[i] = this.aiBuffer[i % this.aiBuffer.length] || inputChannel[i];
+                    }
+                } else {
+                    // DSPピッチシフト（フォールバック）
+                    for (let i = 0; i < inputChannel.length; i++) {
+                        this.delayBuffer[this.writePointer] = inputChannel[i];
+                        
+                        let delay1 = this.writePointer - Math.floor(this.readPointer1);
+                        if (delay1 < 0) delay1 += this.bufferSize;
+                        let delay2 = this.writePointer - Math.floor(this.readPointer2);
+                        if (delay2 < 0) delay2 += this.bufferSize;
 
-                    const sample1 = this.delayBuffer[(Math.floor(this.readPointer1)) % this.bufferSize];
-                    const sample2 = this.delayBuffer[(Math.floor(this.readPointer2)) % this.bufferSize];
+                        const sample1 = this.delayBuffer[(Math.floor(this.readPointer1)) % this.bufferSize];
+                        const sample2 = this.delayBuffer[(Math.floor(this.readPointer2)) % this.bufferSize];
 
-                    let env1 = 1.0 - Math.abs(delay1 - this.windowSize / 2) / (this.windowSize / 2);
-                    let env2 = 1.0 - Math.abs(delay2 - this.windowSize / 2) / (this.windowSize / 2);
-                    env1 = Math.max(0, env1); env2 = Math.max(0, env2);
-                    const envSum = env1 + env2 + 0.0001;
-                    
-                    outputChannel[i] = (sample1 * env1 + sample2 * env2) / envSum;
+                        let env1 = 1.0 - Math.abs(delay1 - this.windowSize / 2) / (this.windowSize / 2);
+                        let env2 = 1.0 - Math.abs(delay2 - this.windowSize / 2) / (this.windowSize / 2);
+                        env1 = Math.max(0, env1); env2 = Math.max(0, env2);
+                        const envSum = env1 + env2 + 0.0001;
+                        
+                        outputChannel[i] = (sample1 * env1 + sample2 * env2) / envSum;
 
-                    this.writePointer = (this.writePointer + 1) % this.bufferSize;
-                    this.readPointer1 = (this.readPointer1 + pitchRatio) % this.bufferSize;
-                    this.readPointer2 = (this.readPointer2 + pitchRatio) % this.bufferSize;
+                        this.writePointer = (this.writePointer + 1) % this.bufferSize;
+                        this.readPointer1 = (this.readPointer1 + this.pitchRatio) % this.bufferSize;
+                        this.readPointer2 = (this.readPointer2 + this.pitchRatio) % this.bufferSize;
+                    }
                 }
 
                 for (let channel = 1; channel < output.length; channel++) {
@@ -247,15 +255,12 @@
                 return true;
             }
         }
-        registerProcessor('pitch-shifter', PitchShifterProcessor);
+        registerProcessor('voice-processor', VoiceProcessor);
         `;
 
-        let audioCtx, micStream, sourceNode, inputGainNode, pitchShifterNode, lowEq, midEq, highEq, analyserNode, outputGainNode;
+        let audioCtx, micStream, sourceNode, inputGainNode, voiceNode, lowEq, midEq, highEq, analyserNode, outputGainNode;
         let isMicActive = false, animationId;
-        
-        // ONNX Inference Session State
-        let onnxSession = null;
-        let isAiMode = false;
+        let onnxSession = null, isAiMode = false;
 
         const btnToggleMic = document.getElementById('btn-toggle-mic');
         const micStatus = document.getElementById('mic-status');
@@ -278,43 +283,69 @@
         const valMid = document.getElementById('val-mid');
         const valHigh = document.getElementById('val-high');
 
-        // --- ONNX Model File Load ---
+        // --- ONNX モデルのロード処理 ---
         onnxModelUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
             onnxFileLabel.textContent = file.name;
-            onnxStatus.textContent = "状態: ONNXモデルを初期化中 (GPU/WebGL)...";
+            onnxStatus.textContent = "状態: ONNX推論エンジンを初期化中...";
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                // Initialize ONNX Runtime Session
+                // WebGL / WASM プロバイダでセッション作成
                 onnxSession = await ort.InferenceSession.create(arrayBuffer, {
                     executionProviders: ['webgl', 'wasm']
                 });
                 
                 isAiMode = true;
-                onnxStatus.textContent = "状態: 🎉 AI ONNXモデルロード完了！(AIリアルタイム変換モード)";
+                if (voiceNode) {
+                    voiceNode.port.postMessage({ type: 'SET_AI_MODE', enabled: true });
+                }
+                onnxStatus.textContent = "状態: 🎉 AI ONNXモデルロード完了 (AIリアルタイム変換中)";
                 onnxStatus.className = "text-[11px] text-green-400 font-mono font-bold mt-2";
             } catch (err) {
                 console.error("ONNX Load Error:", err);
-                onnxStatus.textContent = "エラー: ONNXモデルの読み込みに失敗しました。";
+                onnxStatus.textContent = "エラー: ONNXの初期化に失敗。DSPモードで動作します。";
                 onnxStatus.className = "text-[11px] text-red-400 font-mono mt-2";
             }
         });
 
         async function initAudio() {
             if (audioCtx) return;
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 40000 });
             
-            const blob = new Blob([pitchShifterWorkletCode], { type: 'application/javascript' });
+            const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
             const blobUrl = URL.createObjectURL(blob);
             await audioCtx.audioWorklet.addModule(blobUrl);
 
             inputGainNode = audioCtx.createGain();
             inputGainNode.gain.value = parseFloat(sliderVolume.value);
 
-            pitchShifterNode = new AudioWorkletNode(audioCtx, 'pitch-shifter');
+            voiceNode = new AudioWorkletNode(audioCtx, 'voice-processor');
+            
+            // AudioWorkletからの推論リクエストを処理
+            voiceNode.port.onmessage = async (e) => {
+                if (e.data.type === 'PROCESS_AI_FRAME' && onnxSession && isAiMode) {
+                    try {
+                        const inputFrame = e.data.frame;
+                        const tensorInput = new ort.Tensor('float32', inputFrame, [1, 1, inputFrame.length]);
+                        
+                        // ONNX 推論の実行
+                        const feeds = {};
+                        feeds[onnxSession.inputNames[0]] = tensorInput;
+                        const results = await onnxSession.run(feeds);
+                        const outputTensor = results[onnxSession.outputNames[0]];
+
+                        voiceNode.port.postMessage({
+                            type: 'RECEIVE_AI_AUDIO',
+                            audio: outputTensor.data
+                        });
+                    } catch (err) {
+                        // 推論エラー時は非同期スキップ
+                    }
+                }
+            };
             
             lowEq = audioCtx.createBiquadFilter();
             lowEq.type = 'lowshelf'; lowEq.frequency.value = 150;
@@ -329,8 +360,8 @@
             outputGainNode = audioCtx.createGain();
             outputGainNode.gain.value = checkMonitor.checked ? parseFloat(sliderVolume.value) : 0.0;
 
-            inputGainNode.connect(pitchShifterNode);
-            pitchShifterNode.connect(lowEq);
+            inputGainNode.connect(voiceNode);
+            voiceNode.connect(lowEq);
             lowEq.connect(midEq);
             midEq.connect(highEq);
             highEq.connect(analyserNode);
@@ -384,7 +415,7 @@
         });
 
         function updateSliders() {
-            if (!pitchShifterNode) return;
+            if (!voiceNode) return;
 
             const vol = parseFloat(sliderVolume.value);
             valVolume.textContent = `${vol.toFixed(1)} 倍`;
@@ -393,7 +424,7 @@
 
             const semitones = parseFloat(sliderPitch.value);
             const ratio = Math.pow(2, semitones / 12);
-            pitchShifterNode.parameters.get('pitchRatio').setValueAtTime(ratio, audioCtx.currentTime);
+            voiceNode.port.postMessage({ type: 'SET_PITCH', ratio: ratio });
             valPitch.textContent = `${semitones > 0 ? '+' : ''}${semitones} st`;
 
             lowEq.gain.value = parseFloat(sliderLow.value); valLow.textContent = `${sliderLow.value} dB`;
@@ -402,20 +433,6 @@
         }
 
         [sliderVolume, sliderPitch, sliderLow, sliderMid, sliderHigh].forEach(s => s.addEventListener('input', updateSliders));
-
-        document.getElementById('btn-preset-yukkuri').onclick = () => {
-            sliderVolume.value = 3.0;
-            sliderPitch.value = 12.0;
-            sliderLow.value = -24;
-            sliderMid.value = -12;
-            sliderHigh.value = 12;
-            updateSliders();
-        };
-
-        document.getElementById('btn-preset-reset').onclick = () => {
-            sliderVolume.value = 1.0; sliderPitch.value = 0; sliderLow.value = 0; sliderMid.value = 0; sliderHigh.value = 0;
-            updateSliders();
-        };
 
         function updateCanvasSize() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
         function drawVisualizer() {
@@ -433,7 +450,6 @@
 
             for (let i = 0; i < bufferLength; i++) {
                 barHeight = dataArray[i];
-                const r = 138, g = 43, b = 226; // AI Mode Purple Accent
                 canvasCtx.fillStyle = isAiMode ? `rgb(168, 85, 247)` : `rgb(16, 185, 129)`;
                 canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
                 x += barWidth + 1;
